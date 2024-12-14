@@ -1,6 +1,8 @@
 pipeline {
     agent any
-
+    environment {
+        GIT_CREDENTIALS = 'git_credentials' // Nombre de tus credenciales de Git en Jenkins
+    }
     stages {
         stage('Declarative: Checkout SCM') {
             steps {
@@ -12,7 +14,10 @@ pipeline {
             steps {
                 script {
                     echo 'Integrando cambios a la rama de desarrollo'
-                    bat 'git pull origin desarrollo'  // Cambio de sh a bat
+                    // Actualizar todas las ramas remotas
+                    bat 'git fetch --all'
+                    // Realizar un pull de la rama de desarrollo
+                    bat 'git pull origin desarrollo'
                 }
             }
         }
@@ -21,72 +26,100 @@ pipeline {
             steps {
                 script {
                     echo 'Fusionando cambios a la rama de pruebas'
+                    // Asegurarse de que estamos en la rama correcta
                     bat 'git checkout pruebas'
-                    bat 'git merge desarrollo'
+                    // Realizar el merge con la rama remota 'desarrollo'
+                    bat 'git merge origin/desarrollo'  // Usar la referencia remota 'origin/desarrollo'
                 }
             }
         }
 
         stage('Desplegar en Pruebas') {
+            when {
+                expression {
+                    return currentBuild.result == null || currentBuild.result == 'SUCCESS'
+                }
+            }
             steps {
                 script {
-                    echo 'Desplegando en servidor de pruebas'
-                    // Aquí agregar los comandos para desplegar en el servidor de pruebas
-                    bat 'echo Desplegando en pruebas...'
+                    echo 'Desplegando en pruebas...'
+                    // Aquí iría el comando de despliegue, por ejemplo:
+                    // bat 'deploy_command'
                 }
             }
         }
 
         stage('Respaldo de Producción') {
+            when {
+                expression {
+                    return currentBuild.result == null || currentBuild.result == 'SUCCESS'
+                }
+            }
             steps {
                 script {
-                    echo 'Realizando respaldo del directorio de producción'
-                    bat 'xcopy /E /I /Y "C:\\Produccion" "C:\\Backup\\ProduccionBackup"'
+                    echo 'Realizando respaldo de producción...'
+                    // Aquí iría el comando de respaldo
+                    // bat 'backup_command'
                 }
             }
         }
 
         stage('Fusionar a Producción') {
+            when {
+                expression {
+                    return currentBuild.result == null || currentBuild.result == 'SUCCESS'
+                }
+            }
             steps {
                 script {
                     echo 'Fusionando cambios a la rama de producción'
+                    // Cambiar a la rama de producción
                     bat 'git checkout produccion'
-                    bat 'git merge pruebas'
+                    // Realizar el merge con la rama de pruebas
+                    bat 'git merge origin/pruebas'
                 }
             }
         }
 
         stage('Desplegar a Producción') {
+            when {
+                expression {
+                    return currentBuild.result == null || currentBuild.result == 'SUCCESS'
+                }
+            }
             steps {
                 script {
-                    echo 'Desplegando a producción'
-                    bat 'xcopy /E /I /Y "C:\\Backup\\ProduccionBackup" "C:\\Produccion"'
-                    // Aquí puedes agregar más comandos de despliegue
+                    echo 'Desplegando en producción...'
+                    // Aquí iría el comando de despliegue, por ejemplo:
+                    // bat 'deploy_production_command'
                 }
             }
         }
 
         stage('Restaurar en caso de error') {
+            when {
+                expression {
+                    return currentBuild.result == 'FAILURE'
+                }
+            }
             steps {
                 script {
-                    echo 'Restaurando desde el respaldo en caso de error'
+                    echo 'Restaurando producción debido a un error...'
+                    // El comando para restaurar el backup
                     bat 'xcopy /E /I /Y "C:\\Backup\\ProduccionBackup" "C:\\Produccion"'
                 }
             }
         }
-    }
 
-    post {
-        always {
-            echo 'Pipeline terminado.'
-        }
-        success {
-            echo 'Pipeline ejecutado correctamente.'
-        }
-        failure {
-            echo 'Pipeline fallido, restaurando producción.'
-            // Si necesitas restaurar producción en caso de fallo
-            bat 'xcopy /E /I /Y "C:\\Backup\\ProduccionBackup" "C:\\Produccion"'
+        stage('Declarative: Post Actions') {
+            steps {
+                echo 'Pipeline terminado.'
+                script {
+                    if (currentBuild.result == 'FAILURE') {
+                        echo 'Pipeline fallido, restaurando producción.'
+                    }
+                }
+            }
         }
     }
 }
