@@ -1,18 +1,22 @@
 pipeline {
     agent any
+
     environment {
-        BACKUP_DIR = "/ruta/a/respaldo"  // Cambia la ruta al directorio de respaldo
-        PROD_DIR = "/ruta/a/produccion"  // Cambia la ruta al directorio de producción
+        // Aquí puedes agregar variables de entorno si es necesario
     }
+
     stages {
+        stage('Declarative: Checkout SCM') {
+            steps {
+                checkout scm
+            }
+        }
+
         stage('Integrar a Desarrollo') {
             steps {
                 script {
                     echo 'Integrando cambios a la rama de desarrollo'
-                    sh 'git checkout desarrollo'
-                    sh 'git pull origin desarrollo'
-                    sh 'git merge origin/mi-rama'
-                    sh 'git push origin desarrollo'
+                    bat 'git pull origin desarrollo'  // Cambio de sh a bat
                 }
             }
         }
@@ -20,11 +24,9 @@ pipeline {
         stage('Fusionar a Pruebas') {
             steps {
                 script {
-                    echo 'Fusionando cambios de desarrollo a pruebas'
-                    sh 'git checkout pruebas'
-                    sh 'git pull origin pruebas'
-                    sh 'git merge origin/desarrollo'
-                    sh 'git push origin pruebas'
+                    echo 'Fusionando cambios a la rama de pruebas'
+                    bat 'git checkout pruebas'
+                    bat 'git merge desarrollo'
                 }
             }
         }
@@ -33,7 +35,8 @@ pipeline {
             steps {
                 script {
                     echo 'Desplegando en servidor de pruebas'
-                    sh 'ssh usuario@servidor_pruebas "cd /ruta/del/proyecto && git pull origin pruebas && docker-compose up -d"'
+                    // Aquí agregar los comandos para desplegar en el servidor de pruebas
+                    bat 'echo Desplegando en pruebas...'
                 }
             }
         }
@@ -41,8 +44,8 @@ pipeline {
         stage('Respaldo de Producción') {
             steps {
                 script {
-                    echo 'Realizando respaldo de la producción'
-                    sh 'ssh usuario@servidor_produccion "cp -r $PROD_DIR $BACKUP_DIR/produccion_backup_$(date +%Y%m%d%H%M)"'
+                    echo 'Realizando respaldo del directorio de producción'
+                    bat 'xcopy /E /I /Y "C:\\Produccion" "C:\\Backup\\ProduccionBackup"'
                 }
             }
         }
@@ -50,11 +53,9 @@ pipeline {
         stage('Fusionar a Producción') {
             steps {
                 script {
-                    echo 'Fusionando cambios de pruebas a producción'
-                    sh 'git checkout produccion'
-                    sh 'git pull origin produccion'
-                    sh 'git merge origin/pruebas'
-                    sh 'git push origin produccion'
+                    echo 'Fusionando cambios a la rama de producción'
+                    bat 'git checkout produccion'
+                    bat 'git merge pruebas'
                 }
             }
         }
@@ -62,8 +63,9 @@ pipeline {
         stage('Desplegar a Producción') {
             steps {
                 script {
-                    echo 'Desplegando cambios a producción'
-                    sh 'scp -r /ruta/del/proyecto usuario@servidor_produccion:/ruta/de/produccion'
+                    echo 'Desplegando a producción'
+                    bat 'xcopy /E /I /Y "C:\\Backup\\ProduccionBackup" "C:\\Produccion"'
+                    // Aquí puedes agregar más comandos de despliegue
                 }
             }
         }
@@ -71,10 +73,24 @@ pipeline {
         stage('Restaurar en caso de error') {
             steps {
                 script {
-                    echo 'Restaurando desde el respaldo si hay un error'
-                    sh 'ssh usuario@servidor_produccion "cp -r $BACKUP_DIR/produccion_backup_$(date +%Y%m%d%H%M) $PROD_DIR"'
+                    echo 'Restaurando desde el respaldo en caso de error'
+                    bat 'xcopy /E /I /Y "C:\\Backup\\ProduccionBackup" "C:\\Produccion"'
                 }
             }
+        }
+    }
+
+    post {
+        always {
+            echo 'Pipeline terminado.'
+        }
+        success {
+            echo 'Pipeline ejecutado correctamente.'
+        }
+        failure {
+            echo 'Pipeline fallido, restaurando producción.'
+            // Si necesitas restaurar producción en caso de fallo
+            bat 'xcopy /E /I /Y "C:\\Backup\\ProduccionBackup" "C:\\Produccion"'
         }
     }
 }
