@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        // Aquí puedes agregar variables de entorno si es necesario
+        // No hay variables de entorno definidas por el momento
     }
 
     stages {
